@@ -27,7 +27,7 @@ Restic is chosen over git-lfs for better space efficiency with binary files.
 
 ### `vvvv`
 
-Prints available commands.
+Prints available commands. Exits 0.
 
 ### `vvvv init`
 
@@ -49,9 +49,9 @@ Prints available commands.
 
 ### `vvvv restore <snapshot-id>`
 
-- Restores the full snapshot at the given ID into `./vvvv-<snapshot-id>-<date>-<message>/`, preserving original relative paths inside that directory.
+- Restores the full snapshot at the given ID into `./vvvv-<snapshot-id>/`, preserving original relative paths inside that directory.
 - The working tree is never modified — this is a clean checkout to a new subdirectory.
-- If `./vvvv-<snapshot-id>-<etc>/` already exists, refuses to proceed and exits non-zero.
+- If `./vvvv-<snapshot-id>/` already exists, refuses to proceed and exits non-zero.
 
 ## Known limitations
 
