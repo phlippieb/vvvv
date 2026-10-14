@@ -1,0 +1,92 @@
+#!/bin/sh
+set -eu
+
+VVVV_DIR=".vvvv"
+BACKUP_DIR="$VVVV_DIR/backup"
+LIST_FILE="$VVVV_DIR/list"
+
+die() {
+    printf '%s\n' "$*" >&2
+    exit 1
+}
+
+cmd_help() {
+    cat <<'EOF'
+Usage: vvvv <command> [args]
+
+Commands:
+  init              Initialize a vvvv repository here
+  save <message>    Save a snapshot of the current directory
+  list              List all saved snapshots
+  restore <id>      Restore a snapshot to ./vvvv-<id>/
+EOF
+}
+
+cmd_init() {
+    if [ -d "$VVVV_DIR" ]; then
+        printf 'warning: %s already exists\n' "$VVVV_DIR" >&2
+        exit 1
+    fi
+    mkdir "$VVVV_DIR"
+    RESTIC_PASSWORD="" restic -r "$BACKUP_DIR" --insecure-no-password init
+}
+
+cmd_save() {
+    if [ ! -d "$VVVV_DIR" ]; then
+        die "not a vvvv repo"
+    fi
+    message="$*"
+    output=$(RESTIC_PASSWORD="" restic -r "$BACKUP_DIR" --insecure-no-password backup --exclude ".vvvv" --exclude "vvvv-*" . 2>&1)
+    snapshot_id=$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*snapshot \([a-f0-9][a-f0-9]*\) saved.*/\1/p')
+    if [ -z "$snapshot_id" ]; then
+        die "failed to get snapshot ID from restic"
+    fi
+    date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    printf '%s\t%s\t%s\n' "$snapshot_id" "$date" "$message" >> "$LIST_FILE"
+}
+
+cmd_list() {
+    if [ ! -d "$VVVV_DIR" ]; then
+        die "not a vvvv repo"
+    fi
+    if [ ! -f "$LIST_FILE" ]; then
+        exit 0
+    fi
+    awk '{lines[NR]=$0} END {for(i=NR;i>=1;i--) print lines[i]}' "$LIST_FILE"
+}
+
+cmd_restore() {
+    if [ ! -d "$VVVV_DIR" ]; then
+        die "not a vvvv repo"
+    fi
+    if [ $# -lt 1 ]; then
+        die "usage: vvvv restore <snapshot-id>"
+    fi
+    snapshot_id="$1"
+    target="./vvvv-$snapshot_id"
+    if [ -e "$target" ]; then
+        die "$target already exists"
+    fi
+    RESTIC_PASSWORD="" restic -r "$BACKUP_DIR" --insecure-no-password restore "$snapshot_id" --target "$target"
+}
+
+# --- Main ---
+command="${1:-help}"
+shift || true
+
+if [ "$command" != "help" ] && [ -n "$command" ]; then
+    command -v restic >/dev/null 2>&1 || die "restic is required but not installed"
+fi
+
+case "$command" in
+    help|"") cmd_help ;;
+    init)    cmd_init ;;
+    save)    cmd_save "$@" ;;
+    list)    cmd_list ;;
+    restore) cmd_restore "$@" ;;
+    *)
+        printf 'unknown command: %s\n' "$command" >&2
+        printf 'run "vvvv help" for usage\n' >&2
+        exit 1
+        ;;
+esac
